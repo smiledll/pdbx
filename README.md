@@ -1,4 +1,4 @@
-![PDBX Full Logo](assets/readme_title.png)
+![PDBX Full Logo](https://raw.githubusercontent.com/smiledll/pdbx/refs/heads/master/assets/readme_title.png)
 
 A robust Dart library for managing encrypted databases in the **PDBX** format. Designed for secure storage of passwords, notes, and other sensitive records with group support.
 
