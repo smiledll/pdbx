@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.0+1
+
+### Metadata
+
+- Updated repository reference
+- Improved package description
+- Corrected README asset link
+
+### Legal
+
+- License changed from Apache 2.0 to BSD 3-Clause
+
 ## 1.0.0
 
 - **Initial Release**.
