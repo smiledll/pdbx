@@ -1,8 +1,8 @@
 name: pdbx
-description: Passblock DataBase extension implementation.
-version: 1.0.0
+description: A robust Dart library for managing encrypted databases in the PDBX format. Designed for secure storage of passwords, notes, and other sensitive records with group support.
+version: 1.0.0+1
 homepage: https://passblock.ru
-repository: https://github.com/smiledll/pdbx.
+repository: https://github.com/smiledll/pdbx
 issue_tracker: https://github.com/smiledll/pdbx/issues
 
 environment:
