@@ -8,6 +8,9 @@ doc/api/
 
 .env*
 
+*.iml
+*.ipr
+*.iws
 *.dart.js
 *.info.json
 *.js
@@ -18,5 +21,6 @@ doc/api/
 .flutter-plugins
 .flutter-plugins-dependencies
 
+.idea/
 .obsidian/
 .vscode/

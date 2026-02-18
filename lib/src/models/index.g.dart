@@ -16,6 +16,7 @@ PdbxEntryPointer _$PdbxEntryPointerFromJson(Map<String, dynamic> json) {
       'iv',
       'revision',
       'updated_at',
+      'deleted',
       'offset',
       'size',
     ],
@@ -29,7 +30,7 @@ PdbxEntryPointer _$PdbxEntryPointerFromJson(Map<String, dynamic> json) {
     updatedAt: (json['updated_at'] as num).toInt(),
     offset: (json['offset'] as num).toInt(),
     size: (json['size'] as num).toInt(),
-    deleted: json['deleted'] as bool? ?? false,
+    deleted: json['deleted'] as bool,
   );
 }
 

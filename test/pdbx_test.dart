@@ -4,7 +4,6 @@ library;
 import 'dart:io';
 
 import 'package:pdbx/pdbx.dart';
-import 'package:pdbx/src/core/exceptions.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -12,7 +11,6 @@ void main() {
   late File storageFile;
   late PdbxManager manager;
 
-  // Константы для тестов (явные, чтобы тесты были предсказуемыми)
   const kMasterPassword = 'test-master-password-123';
   const kWrongPassword = 'wrong-password';
 
@@ -41,7 +39,6 @@ void main() {
     test('Удаление хранилища (включая .tmp файлы)', () async {
       await manager.createStorage(kMasterPassword);
 
-      // Имитируем оставшийся после сбоя .tmp файл
       final tempFile = File('${storageFile.path}.tmp');
       await tempFile.writeAsString('leaked data');
 
@@ -56,7 +53,7 @@ void main() {
   group('2. Authentication & Session', () {
     test('Успешная разблокировка существующего файла', () async {
       await manager.createStorage(kMasterPassword);
-      manager.lock(); // Закрываем
+      manager.lock();
 
       await manager.unlock(kMasterPassword);
       expect(manager.locked, isFalse);
@@ -90,7 +87,6 @@ void main() {
       final entry = await manager.createEntry(title: 'Initial Title');
       final originalRevision = entry.revision;
 
-      // Обновляем заголовок
       final updatedEntry = entry.copyWith(title: 'New Title');
       await manager.saveEntry(updatedEntry);
 
@@ -126,7 +122,7 @@ void main() {
       );
 
       expect(manager.getEntriesInGroup(g2.id).first.id, equals(entry.id));
-      expect(manager.getEntriesInGroup(g1.id), isEmpty); // В родительской пусто
+      expect(manager.getEntriesInGroup(g1.id), isEmpty);
     });
 
     test('Запрет удаления системных групп', () async {
@@ -161,7 +157,7 @@ void main() {
       final work = await manager.createGroup(title: 'Work');
 
       await manager.createEntry(title: 'Slack', groupId: work.id);
-      await manager.createEntry(title: 'Personal Slack'); // В корне
+      await manager.createEntry(title: 'Personal Slack');
 
       final results = manager.searchEntriesInGroup('Slack', work.id);
       expect(results.length, 1);

@@ -1,4 +1,7 @@
-# 📦 pdbx (Passblock DataBase eXtension)
+<div style="flex-direction: column; align-items: center">
+<img src="assets/icons/logo.png" width="128" height="128">
+Passblock DataBase eXtension
+</div>
 
 A robust Dart library for managing encrypted databases in the **PDBX** format. Designed for secure storage of passwords, notes, and other sensitive records with group support.
 
@@ -22,8 +25,8 @@ The PDBX format is a custom binary structure optimized for security, atomicity, 
 
 ## 🚀 Key Features
 
-- \*Binary I/O Layer\*\*: Low-level file manipulation via `BinaryReader` and `BinaryWriter` with atomic write support.
-- \*Security First**: Key derivation using **Argon2id** and authenticated encryption via **AES-256-GCM\*\* (`CryptoService`).
+- **Binary I/O Layer**: Low-level file manipulation via `BinaryReader` and `BinaryWriter` with atomic write support.
+- **Security First**: Key derivation using **Argon2id** and authenticated encryption via **AES-256-GCM** (`CryptoService`).
 - **Structured Models**: Fully serializable models: `PdbxEntry`, `PdbxGroup`, `PdbxIndex`, and `PdbxEntryPointer`.
 - **Vault Management (`PdbxManager`)**:
   - Initialize and destroy storage files.
@@ -39,7 +42,7 @@ Add `pdbx` to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-	pdbx: ^0.2.0
+  pdbx: ^1.0.0
 ```
 
 > Note: If you modify models, ensure you run `dart run build_runner build` to generate JSON serialization code.
@@ -48,7 +51,7 @@ dependencies:
 
 ## 🛠️ Usage Example
 
-See [pdbx_example](example/pdbx_example.dart).
+See [pdbx_example.dart](example/pdbx_example.dart).
 
 ---
 

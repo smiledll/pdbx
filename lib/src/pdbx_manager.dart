@@ -6,9 +6,7 @@ import 'dart:typed_data';
 import 'package:pdbx/pdbx.dart';
 import 'package:pdbx/src/core/binary_reader.dart';
 import 'package:pdbx/src/core/binary_writer.dart';
-import 'package:pdbx/src/core/constants.dart';
 import 'package:pdbx/src/core/crypto_service.dart';
-import 'package:pdbx/src/core/exceptions.dart';
 
 /// The central coordinator for Pdbx storage operations.
 ///
@@ -44,7 +42,6 @@ class PdbxManager {
       throw PdbxAuthException('Пароль не может быть пустым.');
     }
 
-    print('Подготовка к созданию хранилища...');
     final salt = CryptoService.generateRandomSalt();
 
     _masterKey = await CryptoService.deriveKey(password, salt);
@@ -61,8 +58,6 @@ class PdbxManager {
     final tempFile = File('${storageFile.path}.tmp');
 
     try {
-      print('Запись в ${tempFile.path}...');
-
       await _writer.writeTo(
         tempFile,
         version: pdbxVersion,
@@ -72,14 +67,10 @@ class PdbxManager {
         entryBlocks: [],
       );
 
-      print('Сохранение ${storageFile.path}...');
-
       if (await storageFile.exists()) {
         await storageFile.delete();
       }
       await tempFile.rename(storageFile.path);
-
-      print('Создано новое хранилище.');
     } catch (e) {
       if (await tempFile.exists()) {
         await tempFile.delete();
@@ -96,14 +87,12 @@ class PdbxManager {
     try {
       if (await storageFile.exists()) {
         await storageFile.delete();
-        print('Файл хранилища удален.');
       }
 
       final tempFile = File('${storageFile.path}.tmp');
 
       if (await tempFile.exists()) {
         await tempFile.delete();
-        print('Временный файл хранилища удалён.');
       }
     } catch (e) {
       throw PdbxStorageException(
@@ -121,8 +110,6 @@ class PdbxManager {
     if (!await _reader.isValid()) throw PdbxFormatException();
 
     try {
-      print('Подготовка к разблокировке хранилища...');
-
       final header = await _reader.readHeader();
 
       _masterKey = await CryptoService.deriveKey(password, header.salt);
@@ -132,7 +119,6 @@ class PdbxManager {
         header.indexLength,
       );
 
-      print('Расшифровка...');
       final decryptedBytes = await CryptoService.decrypt(
         encryptedIndex,
         _masterKey!,
@@ -141,8 +127,6 @@ class PdbxManager {
 
       final json = utf8.decode(decryptedBytes);
       _index = .fromJson(jsonDecode(json));
-
-      print('Доступ разрешён. Индекс загружен.');
     } catch (e) {
       lock();
       throw PdbxAuthException();
@@ -157,8 +141,6 @@ class PdbxManager {
     }
 
     _index = null;
-
-    print('Сессия завершена. Память очищена.');
   }
 
   /// Estimates the entropy (strength) of a [password] in bits.
@@ -298,8 +280,6 @@ class PdbxManager {
 
     _index = _index!.copyWith(entryPointers: updatedPointers);
     await _syncIndex();
-
-    print('Удалена запись [$entryId].');
   }
 
   // ========================
@@ -329,7 +309,6 @@ class PdbxManager {
     try {
       return _index!.groups.firstWhere((g) => g.id == groupId);
     } catch (_) {
-      print('Группа [$groupId] не найдена.');
       return null;
     }
   }
@@ -344,8 +323,6 @@ class PdbxManager {
 
     _index = _index!.copyWith(groups: updatedGroups);
     await _syncIndex();
-
-    print('Группа [${group.id}] сохранена.');
   }
 
   /// Moves a group to the trash. System groups cannot be trashed.
@@ -362,8 +339,6 @@ class PdbxManager {
     await saveGroup(
       group.copyWith(deleted: true, parentGroupId: PdbxGroup.trashGroupId),
     );
-
-    print('Группа [$groupId] перемещена в корзину.');
   }
 
   /// Restores a deleted group.
@@ -378,10 +353,6 @@ class PdbxManager {
         deleted: false,
         parentGroupId: parentGroupId ?? PdbxGroup.rootGroupId,
       ),
-    );
-
-    print(
-      'Группа [$groupId] восстановлена (-> ${parentGroupId ?? PdbxGroup.rootGroupId}).',
     );
   }
 
@@ -406,8 +377,6 @@ class PdbxManager {
 
     _index = _index!.copyWith(groups: updatedGroups);
     await _syncIndex();
-
-    print('Группа [$groupId] удалена.');
   }
 
   /// Returns a list of subgroups for the specified [groupId].
@@ -598,7 +567,6 @@ class PdbxManager {
     );
 
     await _syncIndex();
-    print('Корзина хранилища очищена.');
   }
 
   // ========================
@@ -703,7 +671,6 @@ class PdbxManager {
         }
 
         await tempFile.rename(storageFile.path);
-        print('Синхронизация завершена.');
       } catch (e) {
         if (await tempFile.exists()) {
           await tempFile.delete();

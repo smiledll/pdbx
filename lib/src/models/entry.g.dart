@@ -25,6 +25,7 @@ PdbxEntry _$PdbxEntryFromJson(Map<String, dynamic> json) {
     groupId: json['group_id'] as String,
     createdAt: (json['created_at'] as num).toInt(),
     updatedAt: (json['updated_at'] as num).toInt(),
+    deleted: json['deleted'] as bool? ?? false,
     username: json['username'] as String?,
     password: json['password'] as String?,
     url: json['url'] as String?,
@@ -34,7 +35,6 @@ PdbxEntry _$PdbxEntryFromJson(Map<String, dynamic> json) {
           (k, e) => MapEntry(k, e as String),
         ) ??
         const {},
-    deleted: json['deleted'] as bool? ?? false,
   );
 }
 
@@ -45,10 +45,10 @@ Map<String, dynamic> _$PdbxEntryToJson(PdbxEntry instance) => <String, dynamic>{
   'group_id': instance.groupId,
   'created_at': instance.createdAt,
   'updated_at': instance.updatedAt,
+  'deleted': instance.deleted,
   'username': instance.username,
   'password': instance.password,
   'url': instance.url,
   'notes': instance.notes,
   'custom_fields': instance.customFields,
-  'deleted': instance.deleted,
 };

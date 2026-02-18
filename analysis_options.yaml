@@ -1,4 +1,26 @@
 include: package:lints/recommended.yaml
+
 linter:
   rules:
     - camel_case_types
+    - annotate_overrides
+    - library_prefixes
+    - non_constant_identifier_names
+    - prefer_final_locals
+
+    - unawaited_futures
+    - always_declare_return_types
+    - cancel_subscriptions
+    - close_sinks
+    - no_duplicate_case_values
+
+    - package_names
+
+analyzer:
+  strong-mode:
+    implicit-casts: false
+    implicit-dynamic: false
+
+  exclude:
+    - '**/*.g.dart'
+    - 'lib/generated/**'
