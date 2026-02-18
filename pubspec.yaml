@@ -1,6 +1,8 @@
 name: pdbx
 description: Passblock DataBase extension implementation.
 version: 0.0.1
+repository: https://github.com/smiledll/pdbx.
+issue_tracker: https://github.com/smiledll/pdbx/issues
 publish_to: none
 
 environment:

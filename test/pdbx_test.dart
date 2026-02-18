@@ -1,73 +1,207 @@
+@Timeout(Duration(minutes: 1))
+library;
+
+import 'dart:io';
+
+import 'package:pdbx/pdbx.dart';
 import 'package:pdbx/src/core/exceptions.dart';
-import 'package:pdbx/src/model/entry.dart';
-import 'package:pdbx/src/model/group.dart';
-import 'package:pdbx/src/model/metadata.dart';
-import 'package:pdbx/src/model/storage.dart';
 import 'package:test/test.dart';
 
 void main() {
-  group('PdbxStorage Validation Tests', () {
-    late PdbxGroup root;
-    late PdbxStorage storage;
+  late Directory tempDir;
+  late File storageFile;
+  late PdbxManager manager;
 
-    setUp(() {
-      root = PdbxGroup(name: 'Root', parentGroupId: null);
-      storage = PdbxStorage(
-        schemaVersion: 1,
-        metadata: PdbxMetadata(revision: 0),
-        groups: [root],
-      );
+  // Константы для тестов (явные, чтобы тесты были предсказуемыми)
+  const kMasterPassword = 'test-master-password-123';
+  const kWrongPassword = 'wrong-password';
+
+  setUp(() async {
+    tempDir = await Directory.systemTemp.createTemp('pdbx_test_');
+    storageFile = File('${tempDir.path}/test.pdbx');
+    manager = PdbxManager(storageFile);
+  });
+
+  tearDown(() async {
+    if (await tempDir.exists()) {
+      await tempDir.delete(recursive: true);
+    }
+  });
+
+  group('1. Storage Initialization', () {
+    test('Создание нового файла хранилища', () async {
+      await manager.createStorage(kMasterPassword);
+
+      expect(await storageFile.exists(), isTrue);
+      expect(manager.locked, isFalse);
+      expect(manager.index?.entryPointers, isEmpty);
+      expect(manager.activeGroups.length, equals(2));
     });
 
-    test('EntryValidator accepts vaild entry', () {
-      final entry = PdbxEntry(
-        title: 'Test Entry',
-        username: 'user',
-        password: 'pass',
-        groupId: root.id,
-      );
+    test('Удаление хранилища (включая .tmp файлы)', () async {
+      await manager.createStorage(kMasterPassword);
 
-      expect(() => entry.validate({root.id}), returnsNormally);
+      // Имитируем оставшийся после сбоя .tmp файл
+      final tempFile = File('${storageFile.path}.tmp');
+      await tempFile.writeAsString('leaked data');
+
+      await manager.deleteStorage();
+
+      expect(await storageFile.exists(), isFalse);
+      expect(await tempFile.exists(), isFalse);
+      expect(manager.locked, isTrue);
+    });
+  });
+
+  group('2. Authentication & Session', () {
+    test('Успешная разблокировка существующего файла', () async {
+      await manager.createStorage(kMasterPassword);
+      manager.lock(); // Закрываем
+
+      await manager.unlock(kMasterPassword);
+      expect(manager.locked, isFalse);
+      expect(manager.indexLoaded, isTrue);
     });
 
-    test('EntryValidator rejects entry with invalid groupId', () {
-      final entry = PdbxEntry(
-        title: 'Test Entry',
-        username: 'user',
-        password: 'pass',
-        groupId: 'ne',
-      );
+    test('Ошибка при неверном пароле', () async {
+      await manager.createStorage(kMasterPassword);
+      manager.lock();
 
       expect(
-        () => entry.validate({root.id}),
-        throwsA(isA<ValidationException>()),
+        () => manager.unlock(kWrongPassword),
+        throwsA(isA<PdbxAuthException>()),
       );
+      expect(manager.locked, isTrue);
     });
 
-    test('StorageValidator detects duplicate group ids', () {
-      final group2 = PdbxGroup(
-        id: root.id,
-        name: 'Another',
-        parentGroupId: null,
-      );
-      storage = PdbxStorage(
-        schemaVersion: 1,
-        metadata: storage.metadata,
-        groups: [root, group2],
-      );
+    test('Метод lock() полностью очищает состояние в памяти', () async {
+      await manager.createStorage(kMasterPassword);
+      manager.lock();
 
-      expect(() => storage.validate(), throwsA(isA<ValidationException>()));
+      expect(manager.index, isNull);
+      expect(manager.locked, isTrue);
+      expect(() => manager.activeEntries, throwsA(isA<PdbxLockedException>()));
+    });
+  });
+
+  group('3. CRUD & Data Integrity', () {
+    test('Обновление существующей записи (Revision increment)', () async {
+      await manager.createStorage(kMasterPassword);
+      final entry = await manager.createEntry(title: 'Initial Title');
+      final originalRevision = entry.revision;
+
+      // Обновляем заголовок
+      final updatedEntry = entry.copyWith(title: 'New Title');
+      await manager.saveEntry(updatedEntry);
+
+      final pointer = manager.activeEntries.first;
+      expect(pointer.title, equals('New Title'));
+      expect(pointer.revision, greaterThan(originalRevision));
+
+      final fetched = await manager.fetchEntry(pointer);
+      expect(fetched.title, equals('New Title'));
     });
 
-    test('StorageValidator rejects multiple root groups', () {
-      final root2 = PdbxGroup(name: 'Root2', parentGroupId: null);
-      storage = PdbxStorage(
-        schemaVersion: 1,
-        metadata: storage.metadata,
-        groups: [root, root2],
+    test('Физическое удаление записи без корзины (Permanent delete)', () async {
+      await manager.createStorage(kMasterPassword);
+      final entry = await manager.createEntry(title: 'Kill Me');
+
+      await manager.deleteEntry(entry.id);
+
+      expect(manager.allEntries, isEmpty);
+      expect(manager.searchEntriesInStorage('Kill'), isEmpty);
+    });
+  });
+
+  group('4. Advanced Hierarchy', () {
+    test('Создание записи в глубоко вложенной группе', () async {
+      await manager.createStorage(kMasterPassword);
+
+      final g1 = await manager.createGroup(title: 'L1');
+      final g2 = await manager.createGroup(title: 'L2', parentGroupId: g1.id);
+
+      final entry = await manager.createEntry(
+        title: 'Deep Entry',
+        groupId: g2.id,
       );
 
-      expect(() => storage.validate(), throwsA(isA<ValidationException>()));
+      expect(manager.getEntriesInGroup(g2.id).first.id, equals(entry.id));
+      expect(manager.getEntriesInGroup(g1.id), isEmpty); // В родительской пусто
+    });
+
+    test('Запрет удаления системных групп', () async {
+      await manager.createStorage(kMasterPassword);
+
+      expect(
+        () => manager.deleteGroup(PdbxGroup.rootGroupId),
+        throwsA(isA<PdbxStorageException>()),
+      );
+      expect(
+        () => manager.trashGroup(PdbxGroup.trashGroupId),
+        throwsA(isA<PdbxStorageException>()),
+      );
+    });
+  });
+
+  group('5. Search Logic', () {
+    test('Регистронезависимый поиск в хранилище', () async {
+      await manager.createStorage(kMasterPassword);
+      await manager.createEntry(title: 'BANK OF AMERICA');
+
+      final results = manager.searchEntriesInStorage(
+        'bank',
+        caseSensitive: false,
+      );
+      expect(results.length, 1);
+      expect(results.first.title, contains('BANK'));
+    });
+
+    test('Поиск внутри конкретной группы', () async {
+      await manager.createStorage(kMasterPassword);
+      final work = await manager.createGroup(title: 'Work');
+
+      await manager.createEntry(title: 'Slack', groupId: work.id);
+      await manager.createEntry(title: 'Personal Slack'); // В корне
+
+      final results = manager.searchEntriesInGroup('Slack', work.id);
+      expect(results.length, 1);
+      expect(results.first.title, equals('Slack'));
+    });
+  });
+
+  group('6. Mass Operations & Stress', () {
+    test('Очистка корзины удаляет и записи, и группы', () async {
+      await manager.createStorage(kMasterPassword);
+
+      final folder = await manager.createGroup(title: 'To Burn');
+      await manager.createEntry(title: 'File in folder', groupId: folder.id);
+
+      await manager.trashGroup(folder.id);
+      await manager.trashEntry(manager.activeEntries.first.id);
+
+      expect(manager.isTrashEmpty, isFalse);
+      await manager.emptyTrash();
+
+      expect(manager.isTrashEmpty, isTrue);
+      expect(manager.allGroups.length, 2);
+      expect(manager.allEntries, isEmpty);
+    });
+
+    test('Синхронизация большого количества записей (Stress Test)', () async {
+      await manager.createStorage(kMasterPassword);
+
+      for (int i = 0; i < 50; i++) {
+        await manager.createEntry(title: 'Entry $i');
+      }
+
+      expect(manager.activeEntries.length, 50);
+
+      manager.lock();
+      await manager.unlock(kMasterPassword);
+
+      expect(manager.activeEntries.length, 50);
+      final lastEntry = await manager.fetchEntry(manager.activeEntries.last);
+      expect(lastEntry.title, startsWith('Entry'));
     });
   });
 }

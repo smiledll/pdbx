@@ -1,39 +1,66 @@
-<!-- 
-This README describes the package. If you publish this package to pub.dev,
-this README's contents appear on the landing page for your package.
+# 📦 pdbx (Passblock DataBase eXtension)
 
-For information about how to write a good package README, see the guide for
-[writing package pages](https://dart.dev/tools/pub/writing-package-pages). 
+A robust Dart library for managing encrypted databases in the **PDBX** format. Designed for secure storage of passwords, notes, and other sensitive records with group support.
 
-For general information about developing packages, see the Dart guide for
-[creating packages](https://dart.dev/guides/libraries/create-packages)
-and the Flutter guide for
-[developing packages and plugins](https://flutter.dev/to/develop-packages). 
--->
+---
 
-TODO: Put a short description of the package here that helps potential users
-know whether this package might be useful for them.
+## 🔎 File Format Specification
 
-## Features
+The PDBX format is a custom binary structure optimized for security, atomicity, and sequential access.
 
-TODO: List what your package can do. Maybe include images, gifs, or videos.
+| Field            | Type       | Offset     | Size | Description                                |
+| ---------------- | ---------- | ---------- | ---- | ------------------------------------------ |
+| **magic**        | uint32     | 0x00       | 4B   | Constant `0x70646278` (`pdbx`)             |
+| **version**      | uint16     | 0x04       | 2B   | Format version (Little Endian)             |
+| **index_length** | uint32     | 0x06       | 4B   | Size of encrypted index block              |
+| **salt**         | byte\[16\] | 0x0A       | 16B  | Random salt for Argon2id KDF               |
+| **index_iv**     | byte\[12\] | 0x1A       | 12B  | IV for index decryption                    |
+| **index_block**  | byte\[\]   | 0x26       | var  | Encrypted JSON list of groups and pointers |
+| **entry_blocks** | byte\[\]   | 0x26 + var | var  | Sequential encrypted `PdbxEntry` blocks    |
 
-## Getting started
+---
 
-TODO: List prerequisites and provide or point to information on how to
-start using the package.
+## 🚀 Key Features
 
-## Usage
+- \*Binary I/O Layer\*\*: Low-level file manipulation via `BinaryReader` and `BinaryWriter` with atomic write support.
+- \*Security First**: Key derivation using **Argon2id** and authenticated encryption via **AES-256-GCM\*\* (`CryptoService`).
+- **Structured Models**: Fully serializable models: `PdbxEntry`, `PdbxGroup`, `PdbxIndex`, and `PdbxEntryPointer`.
+- **Vault Management (`PdbxManager`)**:
+  - Initialize and destroy storage files.
+  - Secure session management (Lock/Unlock).
+  - Full CRUD operations with lazy loading (fetch details only when needed).
+  - **Automatic Index Stabilization**: Recalculates offsets during save/delete to ensure data integrity.
 
-TODO: Include short and useful examples for package users. Add longer examples
-to `/example` folder. 
+---
 
-```dart
-const like = 'sample';
+## 📁 Installation
+
+Add `pdbx` to your `pubspec.yaml`:
+
+```yaml
+dependencies:
+	pdbx: ^0.2.0
 ```
 
-## Additional information
+> Note: If you modify models, ensure you run `dart run build_runner build` to generate JSON serialization code.
 
-TODO: Tell users more about the package: where to find more information, how to 
-contribute to the package, how to file issues, what response they can expect 
-from the package authors, and more.
+---
+
+## 🛠️ Usage Example
+
+See [pdbx_example](example/pdbx_example.dart).
+
+---
+
+## 🏗️ Architecture
+
+1. **Binary Layer**: Handles byte-level file access and ensures offsets are correctly managed.
+2. **Crypto Layer**: Manages key stretching (Argon2id) and encryption/decryption (AES-GCM).
+3. **Data Models**: Defines the JSON schema for indices and entries.
+4. **Manager (Facade)**: The high-level API that coordinates state, synchronization, and storage lifecycle.
+
+---
+
+## 📝 Changelog
+
+See [CHANGELOG](CHANGELOG.md).
