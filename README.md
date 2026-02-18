@@ -1,7 +1,4 @@
-<div style="flex-direction: column; align-items: center">
-<img src="assets/icons/logo.png" width="128" height="128">
-Passblock DataBase eXtension
-</div>
+![PDBX Full Logo](assets/readme_title.png)
 
 A robust Dart library for managing encrypted databases in the **PDBX** format. Designed for secure storage of passwords, notes, and other sensitive records with group support.
 
