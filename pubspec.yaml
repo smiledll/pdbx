@@ -1,6 +1,6 @@
 name: pdbx
 description: A robust Dart library for managing encrypted databases in the PDBX format. Designed for secure storage of passwords, notes, and other sensitive records with group support.
-version: 1.0.0+1
+version: 1.1.0
 homepage: https://passblock.ru
 repository: https://github.com/smiledll/pdbx
 issue_tracker: https://github.com/smiledll/pdbx/issues
@@ -9,14 +9,14 @@ environment:
   sdk: ^3.10.0
 
 dependencies:
-  cryptography: ^2.8.0
   argon2_ffi_base: ^1.1.1
+  cryptography: ^2.9.0
   json_annotation: ^4.10.0
-  meta: ^1.17.0
-  uuid: ^4.5.1
+  meta: ^1.18.1
+  uuid: ^4.5.2
 
 dev_dependencies:
-  build_runner: ^2.11.0
+  build_runner: ^2.11.1
   json_serializable: ^6.12.0
-  lints: ^6.0.0
-  test: ^1.25.6
+  lints: ^6.1.0
+  test: ^1.29.0

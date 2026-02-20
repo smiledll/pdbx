@@ -39,7 +39,7 @@ class PdbxManager {
   /// Throws [PdbxStorageException] if file operations fail.
   Future<void> createStorage(String password) async {
     if (password.isEmpty) {
-      throw PdbxAuthException('Пароль не может быть пустым.');
+      throw PdbxAuthException('The password cannot be empty.');
     }
 
     final salt = CryptoService.generateRandomSalt();
@@ -76,7 +76,7 @@ class PdbxManager {
         await tempFile.delete();
       }
 
-      throw PdbxStorageException('Не удалось создать файл хранилища.', e);
+      throw PdbxStorageException('Failed to create storage file.', e);
     }
   }
 
@@ -96,7 +96,7 @@ class PdbxManager {
       }
     } catch (e) {
       throw PdbxStorageException(
-        'Не удалось удалить файлы хранилища. Возможно, они заняты другим процессом.',
+        'Unable to delete storage files. They may be in use by another process.',
         e,
       );
     }
@@ -325,20 +325,54 @@ class PdbxManager {
     await _syncIndex();
   }
 
-  /// Moves a group to the trash. System groups cannot be trashed.
+  /// Recursively moves a group to the trash. System groups cannot be trashed.
   Future<void> trashGroup(String groupId) async {
     _ensureUnlocked();
 
     if (groupId == PdbxGroup.rootGroupId || groupId == PdbxGroup.trashGroupId) {
-      throw PdbxStorageException('Системные группы нельзя удалить.');
+      throw PdbxStorageException('System groups cannot be moved to trash.');
     }
 
     final group = getGroup(groupId);
     if (group == null) return;
 
-    await saveGroup(
-      group.copyWith(deleted: true, parentGroupId: PdbxGroup.trashGroupId),
+    final allIds = <String>{groupId};
+    void collectChildren(String parentGroupId) {
+      for (final g in _index!.groups) {
+        if (g.parentGroupId == parentGroupId) {
+          allIds.add(g.id);
+          collectChildren(g.id);
+        }
+      }
+    }
+
+    collectChildren(groupId);
+
+    final updatedGroups = _index!.groups.map((g) {
+      if (allIds.contains(g.id)) {
+        return g.copyWith(
+          deleted: true,
+          parentGroupId: g.id == groupId
+              ? PdbxGroup.trashGroupId
+              : g.parentGroupId,
+        );
+      }
+
+      return g;
+    }).toList();
+
+    final updatedPointers = _index!.entryPointers.map((p) {
+      if (allIds.contains(p.groupId)) {
+        return p.copyWith(deleted: true);
+      }
+      return p;
+    }).toList();
+
+    _index = _index!.copyWith(
+      groups: updatedGroups,
+      entryPointers: updatedPointers,
     );
+    await _syncIndex();
   }
 
   /// Restores a deleted group.
@@ -357,25 +391,24 @@ class PdbxManager {
   }
 
   /// Permanently removes a group or marks it as deleted.
-  Future<void> deleteGroup(String groupId, {bool permanent = false}) async {
+  Future<void> deleteGroup(String groupId) async {
     _ensureUnlocked();
 
     if (groupId == PdbxGroup.rootGroupId || groupId == PdbxGroup.trashGroupId) {
-      throw PdbxStorageException('Системные группы нельзя удалить.');
+      throw PdbxStorageException(
+        'System groups cannot be permanently deleted.',
+      );
     }
 
-    final updatedGroups = List<PdbxGroup>.from(_index!.groups);
+    final updatedGroups = _index!.groups.where((g) => g.id != groupId).toList();
+    final updatedPointers = _index!.entryPointers
+        .where((p) => p.groupId != groupId)
+        .toList();
 
-    if (permanent) {
-      updatedGroups.removeWhere((g) => g.id == groupId);
-    } else {
-      final index = updatedGroups.indexWhere((g) => g.id == groupId);
-      if (index != -1) {
-        updatedGroups[index] = updatedGroups[index].copyWith(deleted: true);
-      }
-    }
-
-    _index = _index!.copyWith(groups: updatedGroups);
+    _index = _index!.copyWith(
+      groups: updatedGroups,
+      entryPointers: updatedPointers,
+    );
     await _syncIndex();
   }
 
@@ -417,6 +450,18 @@ class PdbxManager {
     return .unmodifiable(
       _index!.entryPointers.where((p) => p.groupId == groupId && !p.deleted),
     );
+  }
+
+  /// Returns an entry pointer by its [id], or null if not found.
+  ///
+  /// This is useful for retrieving metadata (like title or offset)
+  PdbxEntryPointer? getPointer(String id) {
+    _ensureUnlocked();
+    try {
+      return _index!.entryPointers.firstWhere((p) => p.id == id);
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Returns all groups in the index.
@@ -623,7 +668,7 @@ class PdbxManager {
           }
         } catch (e) {
           throw PdbxStorageException(
-            'Ошибка чтения блока данных для [${pointer.title}]',
+            'Error reading data block for [${pointer.title}].',
             e,
           );
         }
@@ -676,12 +721,12 @@ class PdbxManager {
           await tempFile.delete();
         }
 
-        throw PdbxStorageException('Ошибка записи на диск.', e);
+        throw PdbxStorageException('Error writing to disk.', e);
       }
     } on PdbxException {
       rethrow;
     } catch (e) {
-      throw PdbxStorageException('Ошибка синхронизации: $e');
+      throw PdbxStorageException('Synchronization error.', e);
     }
   }
 

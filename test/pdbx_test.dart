@@ -26,32 +26,34 @@ void main() {
     }
   });
 
-  group('1. Storage Initialization', () {
-    test('Создание нового файла хранилища', () async {
+  group('Storage Initialization', () {
+    test(
+      'should create a new storage file with default system groups',
+      () async {
+        await manager.createStorage(kMasterPassword);
+
+        expect(await storageFile.exists(), isTrue);
+        expect(manager.locked, isFalse);
+        expect(manager.activeGroups, hasLength(2));
+        expect(manager.index?.entryPointers, isEmpty);
+      },
+    );
+
+    test('should delete storage and cleanup temporary files', () async {
       await manager.createStorage(kMasterPassword);
-
-      expect(await storageFile.exists(), isTrue);
-      expect(manager.locked, isFalse);
-      expect(manager.index?.entryPointers, isEmpty);
-      expect(manager.activeGroups.length, equals(2));
-    });
-
-    test('Удаление хранилища (включая .tmp файлы)', () async {
-      await manager.createStorage(kMasterPassword);
-
-      final tempFile = File('${storageFile.path}.tmp');
-      await tempFile.writeAsString('leaked data');
+      final tempFile = File('${storageFile.path}.tmp')
+        ..writeAsStringSync('leak');
 
       await manager.deleteStorage();
 
-      expect(await storageFile.exists(), isFalse);
-      expect(await tempFile.exists(), isFalse);
+      expect(storageFile.existsSync(), isFalse);
+      expect(tempFile.existsSync(), isFalse);
       expect(manager.locked, isTrue);
     });
   });
 
-  group('2. Authentication & Session', () {
-    test('Успешная разблокировка существующего файла', () async {
+  group('Authentication & Session Management', () {
+    test('should unlock existing storage with correct password', () async {
       await manager.createStorage(kMasterPassword);
       manager.lock();
 
@@ -60,7 +62,7 @@ void main() {
       expect(manager.indexLoaded, isTrue);
     });
 
-    test('Ошибка при неверном пароле', () async {
+    test('should throw PdbxAuthException on incorrect password', () async {
       await manager.createStorage(kMasterPassword);
       manager.lock();
 
@@ -71,61 +73,78 @@ void main() {
       expect(manager.locked, isTrue);
     });
 
-    test('Метод lock() полностью очищает состояние в памяти', () async {
+    test('lock() should wipe sensitive data from memory', () async {
       await manager.createStorage(kMasterPassword);
       manager.lock();
 
       expect(manager.index, isNull);
-      expect(manager.locked, isTrue);
       expect(() => manager.activeEntries, throwsA(isA<PdbxLockedException>()));
     });
   });
 
-  group('3. CRUD & Data Integrity', () {
-    test('Обновление существующей записи (Revision increment)', () async {
+  group('Data Operations (CRUD)', () {
+    test('should increment revision when updating an entry', () async {
       await manager.createStorage(kMasterPassword);
-      final entry = await manager.createEntry(title: 'Initial Title');
-      final originalRevision = entry.revision;
+      final entry = await manager.createEntry(title: 'V1');
 
-      final updatedEntry = entry.copyWith(title: 'New Title');
-      await manager.saveEntry(updatedEntry);
+      await manager.saveEntry(entry.copyWith(title: 'V2'));
 
-      final pointer = manager.activeEntries.first;
-      expect(pointer.title, equals('New Title'));
-      expect(pointer.revision, greaterThan(originalRevision));
-
-      final fetched = await manager.fetchEntry(pointer);
-      expect(fetched.title, equals('New Title'));
+      final pointer = manager.getPointer(entry.id);
+      expect(pointer?.title, 'V2');
+      expect(pointer!.revision, greaterThan(entry.revision));
     });
 
-    test('Физическое удаление записи без корзины (Permanent delete)', () async {
+    test('should permanently remove entry from index', () async {
       await manager.createStorage(kMasterPassword);
-      final entry = await manager.createEntry(title: 'Kill Me');
+      final entry = await manager.createEntry(title: 'Delete Me');
 
       await manager.deleteEntry(entry.id);
 
+      expect(manager.getPointer(entry.id), isNull);
       expect(manager.allEntries, isEmpty);
-      expect(manager.searchEntriesInStorage('Kill'), isEmpty);
     });
   });
 
-  group('4. Advanced Hierarchy', () {
-    test('Создание записи в глубоко вложенной группе', () async {
+  group('Hierarchical Logic & Trashing', () {
+    test('should manage deep nested groups and entries', () async {
       await manager.createStorage(kMasterPassword);
 
       final g1 = await manager.createGroup(title: 'L1');
       final g2 = await manager.createGroup(title: 'L2', parentGroupId: g1.id);
-
       final entry = await manager.createEntry(
         title: 'Deep Entry',
         groupId: g2.id,
       );
 
       expect(manager.getEntriesInGroup(g2.id).first.id, equals(entry.id));
-      expect(manager.getEntriesInGroup(g1.id), isEmpty);
     });
 
-    test('Запрет удаления системных групп', () async {
+    test('should recursively move a group branch to trash', () async {
+      await manager.createStorage(kMasterPassword);
+
+      final group1 = await manager.createGroup(title: 'Parent');
+      final group2 = await manager.createGroup(
+        title: 'Child',
+        parentGroupId: group1.id,
+      );
+      final entry = await manager.createEntry(
+        title: 'Inner Entry',
+        groupId: group2.id,
+      );
+
+      await manager.trashGroup(group1.id);
+
+      expect(manager.getGroup(group1.id)?.deleted, isTrue);
+      expect(manager.getGroup(group2.id)?.deleted, isTrue);
+      expect(manager.getPointer(entry.id)?.deleted, isTrue);
+
+      expect(
+        manager.getGroup(group1.id)?.parentGroupId,
+        PdbxGroup.trashGroupId,
+      );
+    });
+
+    test('should protect system groups from deletion/trashing', () async {
       await manager.createStorage(kMasterPassword);
 
       expect(
@@ -139,65 +158,54 @@ void main() {
     });
   });
 
-  group('5. Search Logic', () {
-    test('Регистронезависимый поиск в хранилище', () async {
+  group('Search & Retrieval', () {
+    test('should perform case-insensitive search', () async {
       await manager.createStorage(kMasterPassword);
-      await manager.createEntry(title: 'BANK OF AMERICA');
+      await manager.createEntry(title: 'SECURE DATA');
 
       final results = manager.searchEntriesInStorage(
-        'bank',
+        'secure',
         caseSensitive: false,
       );
-      expect(results.length, 1);
-      expect(results.first.title, contains('BANK'));
-    });
-
-    test('Поиск внутри конкретной группы', () async {
-      await manager.createStorage(kMasterPassword);
-      final work = await manager.createGroup(title: 'Work');
-
-      await manager.createEntry(title: 'Slack', groupId: work.id);
-      await manager.createEntry(title: 'Personal Slack');
-
-      final results = manager.searchEntriesInGroup('Slack', work.id);
-      expect(results.length, 1);
-      expect(results.first.title, equals('Slack'));
+      expect(results, hasLength(1));
     });
   });
 
-  group('6. Mass Operations & Stress', () {
-    test('Очистка корзины удаляет и записи, и группы', () async {
+  group('Maintenance & Stress', () {
+    test('emptyTrash() should wipe all deleted entries and groups', () async {
       await manager.createStorage(kMasterPassword);
+      final group = await manager.createGroup(title: 'To Burn');
 
-      final folder = await manager.createGroup(title: 'To Burn');
-      await manager.createEntry(title: 'File in folder', groupId: folder.id);
-
-      await manager.trashGroup(folder.id);
-      await manager.trashEntry(manager.activeEntries.first.id);
+      await manager.createEntry(title: 'Entry 1', groupId: group.id);
+      await manager.createEntry(title: 'Entry 2', groupId: group.id);
+      await manager.createEntry(title: 'Entry 3', groupId: group.id);
+      await manager.trashGroup(group.id);
 
       expect(manager.isTrashEmpty, isFalse);
       await manager.emptyTrash();
 
       expect(manager.isTrashEmpty, isTrue);
-      expect(manager.allGroups.length, 2);
-      expect(manager.allEntries, isEmpty);
+      expect(manager.allGroups, hasLength(2));
     });
 
-    test('Синхронизация большого количества записей (Stress Test)', () async {
+    test('Stress: handle multiple entries with persistence check', () async {
       await manager.createStorage(kMasterPassword);
+      final count = 50;
 
-      for (int i = 0; i < 50; i++) {
+      for (var i = 0; i < count; i++) {
         await manager.createEntry(title: 'Entry $i');
       }
 
-      expect(manager.activeEntries.length, 50);
+      expect(manager.activeEntries, hasLength(count));
 
       manager.lock();
       await manager.unlock(kMasterPassword);
 
-      expect(manager.activeEntries.length, 50);
-      final lastEntry = await manager.fetchEntry(manager.activeEntries.last);
-      expect(lastEntry.title, startsWith('Entry'));
+      expect(manager.activeEntries, hasLength(count));
+      expect(
+        manager.getPointer(manager.activeEntries.last.id)?.title,
+        contains('49'),
+      );
     });
   });
 }

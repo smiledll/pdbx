@@ -39,7 +39,7 @@ Add `pdbx` to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  pdbx: ^1.0.0
+  pdbx: ^1.1.0
 ```
 
 > Note: If you modify models, ensure you run `dart run build_runner build` to generate JSON serialization code.
